@@ -17,10 +17,13 @@ This is meant to be used something like this::
         return pyuac.run_as_admin()
 
     # otherwise carry on doing whatever...
-
 """
 
-import sys, os, traceback, types
+# https://gist.github.com/sylvainpelissier/ff072a6759082590a4fe8f7e070a4952
+
+import os
+import sys
+import traceback
 
 
 def is_user_admin():
@@ -39,15 +42,15 @@ def is_user_admin():
     # WARNING: requires Windows XP SP2 or higher!
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
+    except Exception:
         traceback.print_exc()
         print("Admin check failed, assuming not an admin.")
         return False
 
 
-def run_as_admin(cmdLine=None, wait=True):
+def run_as_admin(cmdline=None, wait=True):
     """Attempt to relaunch the current script as an admin using the same
-    command line parameters.  Pass cmdLine in to override and set a new
+    command line parameters.  Pass cmdline in to override and set a new
     command.  It must be a list of [command, arg1, arg2...] format.
 
     Set wait to False to avoid waiting for the sub-process to finish. You
@@ -69,15 +72,15 @@ def run_as_admin(cmdLine=None, wait=True):
 
     python_exe = sys.executable
 
-    if cmdLine is None:
-        cmdLine = [python_exe] + sys.argv
-    elif not isinstance(cmdLine, (tuple, list)):
-        raise ValueError("cmdLine is not a sequence.")
-    cmd = '"%s"' % (cmdLine[0],)
+    if cmdline is None:
+        cmdline = [python_exe] + sys.argv
+    elif not isinstance(cmdline, (tuple, list)):
+        raise ValueError("cmdline is not a sequence.")
+    cmd = '"%s"' % (cmdline[0],)
     # XXX TODO: isn't there a function or something we can call to massage command line params?
-    params = " ".join(['"%s"' % (x,) for x in cmdLine[1:]])
-    showCmd = win32con.SW_SHOWNORMAL
-    lpVerb = 'runas'  # causes UAC elevation prompt.
+    params = " ".join(['"%s"' % (x,) for x in cmdline[1:]])
+    show_cmd = win32con.SW_SHOWNORMAL
+    verb = 'runas'  # causes UAC elevation prompt.
 
     # print "Running", cmd, params
 
@@ -87,16 +90,16 @@ def run_as_admin(cmdLine=None, wait=True):
 
     # procHandle = win32api.ShellExecute(0, lpVerb, cmd, params, cmdDir, showCmd)
 
-    procInfo = ShellExecuteEx(nShow=showCmd,
-                              fMask=shellcon.SEE_MASK_NOCLOSEPROCESS,
-                              lpVerb=lpVerb,
-                              lpFile=cmd,
-                              lpParameters=params)
+    proc_info = ShellExecuteEx(nShow=show_cmd,
+                               fMask=shellcon.SEE_MASK_NOCLOSEPROCESS,
+                               lpVerb=verb,
+                               lpFile=cmd,
+                               lpParameters=params)
 
     if wait:
-        procHandle = procInfo['hProcess']
-        obj = win32event.WaitForSingleObject(procHandle, win32event.INFINITE)
-        rc = win32process.GetExitCodeProcess(procHandle)
+        proc_handle = proc_info['hProcess']
+        win32event.WaitForSingleObject(proc_handle, win32event.INFINITE)
+        rc = win32process.GetExitCodeProcess(proc_handle)
     else:
         rc = None
 
@@ -106,15 +109,12 @@ def run_as_admin(cmdLine=None, wait=True):
 def test():
     """A simple test function; check if we're admin, and if not relaunch
     the script as admin."""
-    rc = 0
     if not is_user_admin():
         print("You're not an admin.", os.getpid(), "params: ", sys.argv)
-        rc = run_as_admin()
+        run_as_admin()
     else:
         print("You are an admin!", os.getpid(), "params: ", sys.argv)
-        rc = 0
     input('Press Enter to exit.')
-    return rc
 
 
 if __name__ == "__main__":
