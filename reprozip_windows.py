@@ -115,7 +115,7 @@ def read_trace(filename):
         # TODO: Write modes
         return 'read'
 
-    with open(filename, 'r') as csvfile:
+    with open(filename, 'r', encoding='utf-8-sig') as csvfile:
         reader = csv.reader(csvfile)
 
         for idx, row in enumerate(reader):
