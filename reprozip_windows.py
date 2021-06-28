@@ -84,7 +84,7 @@ IGNORED_OPERATIONS = {
     # Non-file events
     'Process Start', 'Thread Create', 'Process Exit', 'Thread Exit',
     # Operations on files that are already open
-    'CloseFile', 'RegCloseKey', 'ReadFile', 'RegQueryValue',
+    'CloseFile', 'RegCloseKey', 'ReadFile', 'WriteFile', 'RegQueryValue',
     'CreateFileMapping', 'QueryDirectory', 'IRP_MJ_CLOSE',
     'QueryNameInformationFile', 'QueryBasicInformationFile',
     'QueryStandardInformationFile',
@@ -108,12 +108,14 @@ def read_trace(filename):
         access_modes = set(access_modes)
         unknown = access_modes - {
             'Execute/Traverse', 'Generic Read', 'Read Attributes',
-            'Read Data/List Directory', 'Synchronize',
+            'Read Data/List Directory', 'Synchronize', 'Generic Write',
         }
         for mode in unknown:
             unknown_modes[mode] += 1
-        # TODO: Write modes
-        return 'read'
+        if 'Generic Write' in access_modes:
+            return 'write'
+        else:
+            return 'read'
 
     with open(filename, 'r', encoding='utf-8-sig') as csvfile:
         reader = csv.reader(csvfile)
