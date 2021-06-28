@@ -8,6 +8,7 @@ import pyuac
 import re
 import subprocess
 import sys
+import time
 
 
 PROCMON = 'C:\\Program Files (x86)\\Procmon\\Procmon.exe'
@@ -26,6 +27,7 @@ def main():
             '/BackingFile', 'temp.pml',
         ],
     )
+    time.sleep(3)
 
     # Run the process
     print("Running: %s" % ' '.join(sys.argv[1:]))
@@ -33,6 +35,7 @@ def main():
     print("Process finished, returned %d" % code)
 
     # Stop tracing
+    time.sleep(3)
     subprocess.check_call([PROCMON, '/Terminate'])
     procmon.wait()
 
