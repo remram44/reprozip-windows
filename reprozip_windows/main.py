@@ -14,12 +14,8 @@ import time
 PROCMON = 'C:\\Program Files (x86)\\Procmon\\Procmon.exe'
 
 
+@pyuac.main_requires_admin()
 def main():
-    # Need to be admin to run procmon
-    if not pyuac.isUserAdmin():
-        pyuac.runAsAdmin()
-        return
-
     # Start tracing
     procmon = subprocess.Popen(
         [
