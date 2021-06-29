@@ -16,8 +16,8 @@ PROCMON = 'C:\\Program Files (x86)\\Procmon\\Procmon.exe'
 
 def main():
     # Need to be admin to run procmon
-    if not pyuac.is_user_admin():
-        pyuac.run_as_admin()
+    if not pyuac.isUserAdmin():
+        pyuac.runAsAdmin()
         return
 
     # Start tracing
