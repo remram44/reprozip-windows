@@ -4,6 +4,7 @@
 from collections import Counter
 import csv
 import os.path
+import pkg_resources
 import pyuac
 import re
 import subprocess
@@ -17,9 +18,12 @@ PROCMON = 'C:\\Program Files (x86)\\Procmon\\Procmon.exe'
 @pyuac.main_requires_admin()
 def main():
     # Start tracing
+    config = pkg_resources.resource_filename('reprozip_windows', 'procmonconfig.pmc')
     procmon = subprocess.Popen(
         [
-            PROCMON, '/Minimized', '/AcceptEula', '/NoFilter', '/Quiet',
+            PROCMON, '/Minimized', '/AcceptEula',
+            '/LoadConfig', config,
+            '/Quiet',
             '/BackingFile', 'temp.pml',
         ],
     )
