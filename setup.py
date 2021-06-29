@@ -8,10 +8,10 @@ os.chdir(os.path.abspath(os.path.dirname(__file__)))
 req = ['pyuac']
 setup(name='reprozip-windows',
       version='0.1',
-      py_modules=['reprozip_windows'],
+      packages=['reprozip_windows'],
       entry_points={
           'console_scripts': [
-              'reprozip-windows = reprozip_windows:main']},
+              'reprozip-windows = reprozip_windows.main:main']},
       install_requires=req,
       description="Tool enabling reproducible experiments (windows packer)",
       author="Remi Rampin, Fernando Chirigati, Dennis Shasha, Juliana Freire",
