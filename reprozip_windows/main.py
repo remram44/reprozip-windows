@@ -9,9 +9,12 @@ import pathlib
 import pkg_resources
 import pyuac
 import re
+import sqlite3
 import subprocess
 import sys
 import time
+
+from reprozip_core.common import FILE_READ, FILE_WRITE, create_trace_schema
 
 
 PROCMON = 'C:\\Program Files (x86)\\Procmon\\Procmon.exe'
@@ -48,11 +51,16 @@ def main():
         '/SaveAs', 'temp.csv',
     ])
 
-    # Read CSV
-    reader = ProcmonCSVReader()
+    # Read CSV, write trace
+    os.makedirs('.reprozip-trace', exist_ok=True)
+    if os.path.exists('.reprozip-trace/trace.sqlite3'):
+        os.remove('.reprozip-trace/trace.sqlite3')
+    db = sqlite3.connect('.reprozip-trace/trace.sqlite3')
+    db.row_factory = sqlite3.Row
+    create_trace_schema(db)
+    reader = ProcmonCSVReader(db)
     reader.read_csv('temp.csv')
-    for op in reader.operations:
-        print(op)
+    db.commit()
 
 
 def parse_details(details):
@@ -102,14 +110,15 @@ IGNORED_OPERATIONS = {
 
 
 class ProcmonCSVReader(object):
-    def __init__(self):
+    def __init__(self, db):
         self.time_reference = None
 
         self.filename = None
         self.row_number = None
+        self.run_id = 0
 
-        self.operations = []
-        self.traced_processes = set()
+        self.db = db
+        self.traced_processes = {}
         self.unknown_operations = Counter()
         self.unknown_access_modes = Counter()
 
@@ -206,21 +215,23 @@ class ProcmonCSVReader(object):
         for mode in unknown:
             self.unknown_access_modes[mode] += 1
         if 'Generic Write' in modes:
-            return 'write'
+            return FILE_WRITE
         else:
-            return 'read'
+            return FILE_READ
 
     def process_row(
         self, time, procname, pid, operation, path, result, details,
     ):
         time = self.parse_time(time)
+        pid = int(pid, 10)
 
         if (
             not self.traced_processes and operation == 'Process Start'
             and procname == os.path.basename(sys.executable)
         ):
             print("Tracing %s: %s" % (pid, procname), file=sys.stderr)
-            self.traced_processes.add(pid)
+            process_key = self.add_process(time, None, None)
+            self.traced_processes[pid] = process_key
         elif pid not in self.traced_processes:
             return
 
@@ -228,12 +239,12 @@ class ProcmonCSVReader(object):
             pass
         elif operation == 'Load Image':
             if result == 'SUCCESS':
-                self.operations.append(('read', path))
+                self.add_file_access(time, pid, path, FILE_READ)
         elif operation == 'CreateFile':
             if result == 'SUCCESS':
                 info = parse_details(details)
                 mode = self.parse_access_mode(info['Desired Access'])
-                self.operations.append((mode, path))
+                self.add_file_access(time, pid, path, mode)
         elif operation == 'RegOpenKey':
             pass  # TODO
         elif operation == 'Process Create':
@@ -245,9 +256,44 @@ class ProcmonCSVReader(object):
                 )
             else:
                 childpid, childcmd = m.groups()
-                self.operations.append(('create-proc', childpid, childcmd))
+                childpid = int(childpid, 10)
+                parent_key = self.traced_processes[pid]
+                child_key = self.add_process(time, parent_key, childcmd)
+                self.traced_processes[childpid] = child_key
         else:
             self.unknown_operations[operation] += 1
+
+    def add_file_access(self, time, pid, path, mode):
+        self.db.execute(
+            '''
+            INSERT INTO opened_files(
+                run_id, name, timestamp,
+                mode, is_directory,
+                process
+            )
+            VALUES(?, ?, ?, ?, ?, ?);
+            ''',
+            (
+                self.run_id, path, time.strftime('%Y-%m-%d %H:%M:%S'),
+                mode, os.path.isdir(path),
+                pid,
+            ),
+        )
+
+    def add_process(self, time, parent_pid, command):
+        self.db.execute(
+            '''
+            INSERT INTO processes(run_id, parent, timestamp, is_thread)
+            VALUES(?, ?, ?, 0);
+            ''',
+            (self.run_id, parent_pid, time.strftime('%Y-%m-%d %H:%M:%S')),
+        )
+        for row in self.db.execute(
+            '''
+            SELECT last_insert_rowid();
+            ''',
+        ):
+            return row[0]
 
 
 if __name__ == '__main__':
