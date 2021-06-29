@@ -3,6 +3,7 @@
 
 from collections import Counter
 import csv
+from datetime import datetime, timedelta
 import os.path
 import pathlib
 import pkg_resources
@@ -102,6 +103,8 @@ IGNORED_OPERATIONS = {
 
 class ProcmonCSVReader(object):
     def __init__(self):
+        self.time_reference = None
+
         self.filename = None
         self.row_number = None
 
@@ -125,6 +128,9 @@ class ProcmonCSVReader(object):
             self.row_number = None
 
     def _read_csv(self, file):
+        if self.time_reference is None:
+            self.time_reference = datetime.utcnow()
+
         # Open CSV
         reader = csv.reader(file)
         try:
@@ -160,6 +166,37 @@ class ProcmonCSVReader(object):
                 file=sys.stderr,
             )
 
+    def parse_time(self, time):
+        # Parse fields
+        m = re.match(
+            r'([0-9]{1,2}):([0-9]{2}):([0-9]{2}).([0-9]+) (AM|PM)$',
+            time,
+        )
+        if m is None:
+            raise ValueError("Invalid time %r" % time)
+        hour, minute, second, frac, am_pm = m.groups()
+        hour = int(hour, 10)
+        minute = int(minute, 10)
+        second = int(second, 10)
+        # AM/PM
+        if am_pm == 'PM':
+            hour += 12
+        # Turn fractional part into microseconds (6 digits)
+        microsecond = frac[:6] + ('0' * (6 - len(frac)))
+        microsecond = int(microsecond, 10)
+
+        # Build datetime object, filling from reference
+        ref = self.time_reference
+        date = datetime(
+            ref.year, ref.month, ref.day,
+            hour, minute, second, microsecond,
+        )
+        # If we're ahead, it's probably a different day
+        # This catches problems around midnight
+        if (hour, minute) > (ref.hour, ref.minute):
+            date -= timedelta(days=1)
+        return date
+
     def parse_access_mode(self, modes):
         modes = set(modes)
         unknown = modes - {
@@ -176,6 +213,8 @@ class ProcmonCSVReader(object):
     def process_row(
         self, time, procname, pid, operation, path, result, details,
     ):
+        time = self.parse_time(time)
+
         if (
             not self.traced_processes and operation == 'Process Start'
             and procname == os.path.basename(sys.executable)
